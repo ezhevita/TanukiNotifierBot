@@ -1,0 +1,16 @@
+# User-specific files
+*.user
+config.json
+log.txt
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+[Bb]in/
+[Oo]bj/
+
+# Files built by Visual Studio
+*.pdb
+
+# JetBrains Rider
+.idea/
