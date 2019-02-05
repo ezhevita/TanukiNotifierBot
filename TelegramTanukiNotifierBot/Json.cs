@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
+
 #pragma warning disable 649
 
 namespace TelegramTanukiNotifierBot {

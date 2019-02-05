@@ -124,7 +124,7 @@ namespace TelegramTanukiNotifierBot {
 				string response = $"{product.Title}\nСтарая цена: {product.Price}₽\nЦена по акции: {item.Price}₽\n[Ссылка]({product.Link})";
 				await BotClient.SendPhotoAsync(Config.Channel, new InputOnlineFile(product.ImageLink), response, ParseMode.Markdown).ConfigureAwait(false);
 
-				Log($"Successfully sent info about current offer!");
+				Log("Successfully sent info about current offer!");
 				await Task.Delay(TimeSpan.FromSeconds(item.TimeInfo.LeftSeconds)).ConfigureAwait(false);
 			}
 		}
@@ -147,7 +147,7 @@ namespace TelegramTanukiNotifierBot {
 				return null;
 			}
 
-			string scriptContent = node.InnerText.Split(new []{'\r', '\n'}, StringSplitOptions.RemoveEmptyEntries)[0];
+			string scriptContent = node.InnerText.Split(new[] {'\r', '\n'}, StringSplitOptions.RemoveEmptyEntries)[0];
 
 			const string beginning = "__NEXT_DATA__ = ";
 			scriptContent = scriptContent.Trim().Substring(beginning.Length);
