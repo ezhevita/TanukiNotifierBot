@@ -179,9 +179,9 @@ namespace TelegramTanukiNotifierBot {
 		}
 
 		internal static void Log(string log) {
-			string formattedLog = $"{DateTime.UtcNow:G}|{log}";
+			string formattedLog = $"{DateTime.UtcNow:O}|{log}";
 			Console.WriteLine(formattedLog);
-			File.AppendAllText("log.txt", formattedLog);
+			File.AppendAllText("log.txt", formattedLog + Environment.NewLine);
 		}
 	}
 }
