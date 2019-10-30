@@ -29,6 +29,74 @@ namespace TelegramTanukiNotifierBot {
 			Timeout = TimeSpan.FromSeconds(10)
 		};
 
+		private static async Task<ProductData> GetProducts() {
+			HttpResponseMessage menuResponseMessage = await HttpClient.GetAsync(TanukiHost + "/menu").ConfigureAwait(false);
+			if (!menuResponseMessage.IsSuccessStatusCode) {
+				Log($"Got error on menu request: {menuResponseMessage.StatusCode}");
+				return null;
+			}
+
+			string menuResponseText = await menuResponseMessage.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+			HtmlDocument menuHtml = new HtmlDocument();
+			menuHtml.LoadHtml(menuResponseText);
+
+			HtmlNode node = menuHtml.DocumentNode.SelectSingleNode("/html/body/script[1]");
+			if (node == null) {
+				Log($"{nameof(node)} is null!");
+				return null;
+			}
+
+			string scriptContent = node.InnerText.Split(new[] {'\r', '\n'}, StringSplitOptions.RemoveEmptyEntries)[0];
+
+			const string prefix = "__NEXT_DATA__ = ";
+			scriptContent = scriptContent.Trim().Substring(prefix.Length);
+
+			MenuResponse menuResponse;
+			try {
+				menuResponse = JsonConvert.DeserializeObject<MenuResponse>(scriptContent);
+			} catch (JsonException e) {
+				Log($"Exception occured: {e.Message}");
+				return null;
+			}
+
+			if (menuResponse.Error != null) {
+				Log($"Got a menu error: {menuResponse.Error}");
+				return null;
+			}
+
+			MenuResponse.Properties.State.ProductsInfo productsInfo = menuResponse.PropertiesInfo.InitialState.Products;
+			if (productsInfo.Error != null) {
+				Log($"Got a product error: {productsInfo.Error}");
+				return null;
+			}
+
+			// Tanuki gives us invalid link in the JSON, so we have to correct it using data from HTML
+			foreach ((ushort id, MenuResponse.Properties.State.ProductsInfo.Product product) in productsInfo.Products) {
+				HtmlNode productNode = menuHtml.DocumentNode.SelectSingleNode($"//div[@data-id='{id}']/div/div[@class='product__box']/a");
+				if (productNode == null) {
+					Log($"{id} - {nameof(productNode)} is null!");
+					continue;
+				}
+
+				string productUrl = productNode.GetAttributeValue("href", "");
+				if (string.IsNullOrEmpty(productUrl)) {
+					Log($"{id} - {nameof(productUrl)} is null!");
+					continue;
+				}
+
+				product.Link = TanukiHost + productUrl;
+			}
+
+			return productsInfo.Products;
+		}
+
+		internal static void Log(string log) {
+			string formattedLog = $"{DateTime.UtcNow:O}|{log}";
+			Console.WriteLine(formattedLog);
+			File.AppendAllText("log.txt", formattedLog + Environment.NewLine);
+		}
+
 		private static async Task Main() {
 			Log($"Starting {nameof(TelegramTanukiNotifierBot)}");
 
@@ -131,74 +199,6 @@ namespace TelegramTanukiNotifierBot {
 					Log("Unknown exception: " + e);
 				}
 			}
-		}
-
-		private static async Task<ProductData> GetProducts() {
-			HttpResponseMessage menuResponseMessage = await HttpClient.GetAsync(TanukiHost + "/menu").ConfigureAwait(false);
-			if (!menuResponseMessage.IsSuccessStatusCode) {
-				Log($"Got error on menu request: {menuResponseMessage.StatusCode}");
-				return null;
-			}
-
-			string menuResponseText = await menuResponseMessage.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-			HtmlDocument menuHtml = new HtmlDocument();
-			menuHtml.LoadHtml(menuResponseText);
-
-			HtmlNode node = menuHtml.DocumentNode.SelectSingleNode("/html/body/script[1]");
-			if (node == null) {
-				Log($"{nameof(node)} is null!");
-				return null;
-			}
-
-			string scriptContent = node.InnerText.Split(new[] {'\r', '\n'}, StringSplitOptions.RemoveEmptyEntries)[0];
-
-			const string prefix = "__NEXT_DATA__ = ";
-			scriptContent = scriptContent.Trim().Substring(prefix.Length);
-
-			MenuResponse menuResponse;
-			try {
-				menuResponse = JsonConvert.DeserializeObject<MenuResponse>(scriptContent);
-			} catch (JsonException e) {
-				Log($"Exception occured: {e.Message}");
-				return null;
-			}
-
-			if (menuResponse.Error != null) {
-				Log($"Got a menu error: {menuResponse.Error}");
-				return null;
-			}
-
-			MenuResponse.Properties.State.ProductsInfo productsInfo = menuResponse.PropertiesInfo.InitialState.Products;
-			if (productsInfo.Error != null) {
-				Log($"Got a product error: {productsInfo.Error}");
-				return null;
-			}
-
-			// Tanuki gives us invalid link in the JSON, so we have to correct it using data from HTML
-			foreach ((ushort id, MenuResponse.Properties.State.ProductsInfo.Product product) in productsInfo.Products) {
-				HtmlNode productNode = menuHtml.DocumentNode.SelectSingleNode($"//div[@data-id='{id}']/div/div[@class='product__box']/a");
-				if (productNode == null) {
-					Log($"{id} - {nameof(productNode)} is null!");
-					continue;
-				}
-
-				string productUrl = productNode.GetAttributeValue("href", "");
-				if (string.IsNullOrEmpty(productUrl)) {
-					Log($"{id} - {nameof(productUrl)} is null!");
-					continue;
-				}
-
-				product.Link = TanukiHost + productUrl;
-			}
-
-			return productsInfo.Products;
-		}
-
-		internal static void Log(string log) {
-			string formattedLog = $"{DateTime.UtcNow:O}|{log}";
-			Console.WriteLine(formattedLog);
-			File.AppendAllText("log.txt", formattedLog + Environment.NewLine);
 		}
 	}
 }
