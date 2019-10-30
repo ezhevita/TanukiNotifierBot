@@ -175,6 +175,23 @@ namespace TelegramTanukiNotifierBot {
 				return null;
 			}
 
+			// Tanuki gives us invalid link in the JSON, so we have to correct it using data from HTML
+			foreach ((ushort id, MenuResponse.Properties.State.ProductsInfo.Product product) in productsInfo.Products) {
+				HtmlNode productNode = menuHtml.DocumentNode.SelectSingleNode($"//div[@data-id='{id}']/div/div[@class='product__box']/a");
+				if (productNode == null) {
+					Log($"{id} - {nameof(productNode)} is null!");
+					continue;
+				}
+
+				string productUrl = productNode.GetAttributeValue("href", "");
+				if (string.IsNullOrEmpty(productUrl)) {
+					Log($"{id} - {nameof(productUrl)} is null!");
+					continue;
+				}
+
+				product.Link = TanukiHost + productUrl;
+			}
+
 			return productsInfo.Products;
 		}
 
