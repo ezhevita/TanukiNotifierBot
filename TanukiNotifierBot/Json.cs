@@ -5,7 +5,7 @@ using Newtonsoft.Json;
 // ReSharper disable UnusedAutoPropertyAccessor.Global
 // ReSharper disable ClassNeverInstantiated.Global
 
-namespace TelegramTanukiNotifierBot {
+namespace TanukiNotifierBot {
 	internal sealed class ApiResponse {
 		[JsonProperty(Required = Required.DisallowNull)]
 		internal InternalResponseBody? ResponseBody { get; private set; }
@@ -36,7 +36,7 @@ namespace TelegramTanukiNotifierBot {
 			[JsonProperty(PropertyName = "result", Required = Required.Always)]
 			internal bool Result { get; private set; }
 
-			internal record Item : TelegramTanukiNotifierBot.Item {
+			internal record Item : TanukiNotifierBot.Item {
 				[JsonProperty(PropertyName = "time", Required = Required.Always)]
 				internal Time TimeInfo { get; private set; }
 

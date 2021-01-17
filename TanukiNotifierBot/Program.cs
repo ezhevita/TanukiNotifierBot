@@ -15,9 +15,9 @@ using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.InputFiles;
-using ProductData = System.Collections.Generic.Dictionary<ushort, TelegramTanukiNotifierBot.MenuResponse.Properties.State.ProductsInfo.Product>;
+using ProductData = System.Collections.Generic.Dictionary<ushort, TanukiNotifierBot.MenuResponse.Properties.State.ProductsInfo.Product>;
 
-namespace TelegramTanukiNotifierBot {
+namespace TanukiNotifierBot {
 	internal static class Program {
 		private const string TanukiHost = "https://www.tanuki.ru";
 		private static ProductData? CachedProductData;
@@ -27,7 +27,7 @@ namespace TelegramTanukiNotifierBot {
 				BaseAddress = new Uri(TanukiHost),
 				DefaultRequestHeaders = {
 					UserAgent = {
-						new ProductInfoHeaderValue(nameof(TelegramTanukiNotifierBot), Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown")
+						new ProductInfoHeaderValue(nameof(TanukiNotifierBot), Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown")
 					}
 				},
 				Timeout = TimeSpan.FromSeconds(10)
@@ -112,7 +112,7 @@ namespace TelegramTanukiNotifierBot {
 		}
 
 		private static async Task Main() {
-			Log($"Starting {nameof(TelegramTanukiNotifierBot)}");
+			Log($"Starting {nameof(TanukiNotifierBot)}");
 
 			Configuration? config = await Configuration.Load().ConfigureAwait(false);
 			if (config == null) {

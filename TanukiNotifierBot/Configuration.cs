@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace TelegramTanukiNotifierBot {
+namespace TanukiNotifierBot {
 	public class Configuration {
 		[JsonConstructor]
 		// ReSharper disable once MemberCanBePrivate.Global

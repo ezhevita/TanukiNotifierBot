@@ -8,7 +8,6 @@
 		<TargetFramework>net5.0</TargetFramework>
 		<LangVersion>latest</LangVersion>
 		<Nullable>enable</Nullable>
-		<RootNamespace>TelegramTanukiNotifierBot</RootNamespace>
 	</PropertyGroup>
 
 	<ItemGroup>
