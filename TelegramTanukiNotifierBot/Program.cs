@@ -2,10 +2,15 @@
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Text;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using HtmlAgilityPack;
-using Newtonsoft.Json;
+using AngleSharp.Dom;
+using AngleSharp.Html.Dom;
+using AngleSharp.Html.Parser;
+using AngleSharp.XPath;
+using Flurl.Http;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types.Enums;
@@ -15,74 +20,83 @@ using ProductData = System.Collections.Generic.Dictionary<ushort, TelegramTanuki
 namespace TelegramTanukiNotifierBot {
 	internal static class Program {
 		private const string TanukiHost = "https://www.tanuki.ru";
-		private static TelegramBotClient BotClient;
-		private static ProductData CachedProductData;
+		private static ProductData? CachedProductData;
 
-		private static Configuration Config;
+		private static readonly IFlurlClient Client = new FlurlClient(
+			new HttpClient {
+				BaseAddress = new Uri(TanukiHost),
+				DefaultRequestHeaders = {
+					UserAgent = {
+						new ProductInfoHeaderValue(nameof(TelegramTanukiNotifierBot), Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown")
+					}
+				},
+				Timeout = TimeSpan.FromSeconds(10)
+			}
+		);
 
-		private static readonly HttpClient HttpClient = new HttpClient {
-			DefaultRequestHeaders = {
-				UserAgent = {
-					new ProductInfoHeaderValue(nameof(TelegramTanukiNotifierBot), "2.0")
-				}
+		private static readonly object ApiPostData = new {
+			header = new {
+				version = "2.0",
+				userId = "Bot",
+				debugMode = false,
+				agent = new {
+					device = "desktop",
+					version = "Bot"
+				},
+				cityId = "1"
 			},
-			Timeout = TimeSpan.FromSeconds(10)
+			method = new {
+				name = "getSpecialGoods"
+			},
+			data = new { }
 		};
 
+		private static readonly JsonSerializerOptions SerializerOptions = new() {
+			NumberHandling = JsonNumberHandling.AllowReadingFromString,
+			PropertyNameCaseInsensitive = true
+		};
+
+		private static readonly HtmlParser Parser = new();
+
 		private static async Task<ProductData> GetProducts() {
-			HttpResponseMessage menuResponseMessage = await HttpClient.GetAsync(TanukiHost + "/menu").ConfigureAwait(false);
-			if (!menuResponseMessage.IsSuccessStatusCode) {
-				Log($"Got error on menu request: {menuResponseMessage.StatusCode}");
-				return null;
-			}
+			Stream? menuStream = await Client.Request("/menu").GetStreamAsync().ConfigureAwait(false);
 
-			string menuResponseText = await menuResponseMessage.Content.ReadAsStringAsync().ConfigureAwait(false);
+			IHtmlDocument? document = await Parser.ParseDocumentAsync(menuStream).ConfigureAwait(false);
 
-			HtmlDocument menuHtml = new HtmlDocument();
-			menuHtml.LoadHtml(menuResponseText);
-
-			HtmlNode node = menuHtml.DocumentNode.SelectSingleNode("/html/body/script[1]");
+			INode? node = document.Body.SelectSingleNode("/html/body/script[1]");
 			if (node == null) {
-				Log($"{nameof(node)} is null!");
-				return null;
+				throw new TanukiException(nameof(node) + " is null");
 			}
 
-			string scriptContent = node.InnerText.Split(new[] {'\r', '\n'}, StringSplitOptions.RemoveEmptyEntries)[0];
+			string scriptContent = node.TextContent.Split('\n', StringSplitOptions.RemoveEmptyEntries)[0];
 
 			const string prefix = "__NEXT_DATA__ = ";
-			scriptContent = scriptContent.Trim().Substring(prefix.Length);
+			scriptContent = scriptContent.Trim()[prefix.Length..];
 
-			MenuResponse menuResponse;
-			try {
-				menuResponse = JsonConvert.DeserializeObject<MenuResponse>(scriptContent);
-			} catch (JsonException e) {
-				Log($"Exception occured: {e.Message}");
-				return null;
+			MenuResponse? menuResponse = JsonSerializer.Deserialize<MenuResponse>(scriptContent, SerializerOptions);
+			if (menuResponse == null) {
+				throw new TanukiException(nameof(menuResponse) + " is null");
 			}
 
-			if (menuResponse.Error != null) {
-				Log($"Got a menu error: {menuResponse.Error}");
-				return null;
+			if (!string.IsNullOrEmpty(menuResponse.Error)) {
+				throw new TanukiException($"Menu error: {menuResponse.Error}");
 			}
 
 			MenuResponse.Properties.State.ProductsInfo productsInfo = menuResponse.PropertiesInfo.InitialState.Products;
-			if (productsInfo.Error != null) {
-				Log($"Got a product error: {productsInfo.Error}");
-				return null;
+			if (!string.IsNullOrEmpty(productsInfo.Error)) {
+				throw new TanukiException($"Products error: {productsInfo.Error}");
 			}
 
 			// Tanuki gives us invalid link in the JSON, so we have to correct it using data from HTML
 			foreach ((ushort id, MenuResponse.Properties.State.ProductsInfo.Product product) in productsInfo.Products) {
-				HtmlNode productNode = menuHtml.DocumentNode.SelectSingleNode($"//div[@data-id='{id}']/div/div[@class='product__box']/a");
+				IElement? productNode = (IElement) document.Body.SelectSingleNode($"//div[@data-id='{id}']/div/div[@class='product__box']/a");
 				if (productNode == null) {
-					Log($"{id} - {nameof(productNode)} is null!");
-					continue;
+					throw new TanukiException(nameof(productNode) + " is null");
 				}
 
-				string productUrl = productNode.GetAttributeValue("href", "");
+				string productUrl = productNode.GetAttribute("href");
 				if (string.IsNullOrEmpty(productUrl)) {
-					Log($"{id} - {nameof(productUrl)} is null!");
-					continue;
+					throw new TanukiException($"{id} - {nameof(productUrl)} is null");
 				}
 
 				product.Link = TanukiHost + productUrl;
@@ -91,7 +105,7 @@ namespace TelegramTanukiNotifierBot {
 			return productsInfo.Products;
 		}
 
-		internal static void Log(string log) {
+		private static void Log(string log) {
 			string formattedLog = $"{DateTime.UtcNow:O}|{log}";
 			Console.WriteLine(formattedLog);
 			File.AppendAllText("log.txt", formattedLog + Environment.NewLine);
@@ -100,23 +114,24 @@ namespace TelegramTanukiNotifierBot {
 		private static async Task Main() {
 			Log($"Starting {nameof(TelegramTanukiNotifierBot)}");
 
-			Configuration loadedConfig = Configuration.Load();
-			if (loadedConfig == null) {
-				loadedConfig = Configuration.Create();
-				loadedConfig.Save();
+			Configuration? config = await Configuration.Load().ConfigureAwait(false);
+			if (config == null) {
+				config = Configuration.Create();
+				await config.Save().ConfigureAwait(false);
 			}
 
-			Config = loadedConfig;
-			BotClient = new TelegramBotClient(Config.BotToken);
+			TelegramBotClient botClient = new(config.BotToken);
 
 			try {
-				bool testResult = await BotClient.TestApiAsync().ConfigureAwait(false);
+				bool testResult = await botClient.TestApiAsync().ConfigureAwait(false);
 				if (!testResult) {
 					Log("Invalid API token");
+
 					return;
 				}
 			} catch (ApiRequestException e) {
 				Log($"Exception when testing Telegram API: {e}");
+
 				return;
 			}
 
@@ -129,74 +144,65 @@ namespace TelegramTanukiNotifierBot {
 						firstTime = false;
 					}
 
-					HttpResponseMessage responseMessage = await HttpClient.PostAsync(TanukiHost + "/api/", new StringContent("{\"header\":{\"version\":\"2.0\",\"userId\":\"Bot\",\"debugMode\":false,\"agent\":{\"device\":\"desktop\",\"version\":\"Bot\"},\"cityId\":\"1\"},\"method\":{\"name\":\"getSpecialGoods\"},\"data\":{}}", Encoding.UTF8, "application/json")).ConfigureAwait(false);
-					if (!responseMessage.IsSuccessStatusCode) {
-						Log($"Got an error on Tanuki API request: {responseMessage.StatusCode}");
-						continue;
-					}
-
-					string responseText = await responseMessage.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-					ApiResponse apiResponse;
-					try {
-						apiResponse = JsonConvert.DeserializeObject<ApiResponse>(responseText);
-					} catch (JsonException e) {
-						Log($"Exception occured: {e.Message}");
-						continue;
-					}
+					ApiResponse? apiResponse = await Client.Request("/api/")
+						.PostJsonAsync(ApiPostData)
+						.ReceiveJson<ApiResponse>()
+						.ConfigureAwait(false);
 
 					if (apiResponse == null) {
-						Log($"{nameof(apiResponse)} is null!");
-						continue;
+						throw new TanukiException($"{nameof(apiResponse)} is null");
 					}
 
 					if (apiResponse.ResponseInfo.ResultInfo.ErrorCode != 0) {
 						ApiResponse.InternalResponse.Result errorResult = apiResponse.ResponseInfo.ResultInfo;
-						Log($"Failed with code {errorResult.Code}, error code {errorResult.ErrorCode}, message: {errorResult.Message}");
-						continue;
+
+						throw new TanukiException($"Failed with code {errorResult.Code}, error code {errorResult.ErrorCode}, message: {errorResult.Message}");
+					}
+
+					if (apiResponse.ResponseBody == null) {
+						throw new TanukiException(nameof(apiResponse.ResponseBody) + " is null");
 					}
 
 					if (!apiResponse.ResponseBody.Result) {
-						Log("Failed with false body result");
-						continue;
+						throw new TanukiException("Failed with false body result");
 					}
 
-					if (!apiResponse.ResponseBody.Items.ContainsKey("current")) {
-						Log("Items doesn't contain current offer");
-						continue;
+					if (apiResponse.ResponseBody.Items == null) {
+						throw new TanukiException(nameof(apiResponse.ResponseBody.Items) + " is null");
 					}
 
-					ApiResponse.InternalResponseBody.Item item = apiResponse.ResponseBody.Items["current"];
+					if (!apiResponse.ResponseBody.Items.TryGetValue("current", out ApiResponse.InternalResponseBody.Item? item)) {
+						throw new TanukiException("Items collection doesn't contain current offer");
+					}
+
 					if ((item.ID == 0) || (item.Price == 0)) {
-						Log($"{nameof(item)} is invalid");
-						continue;
+						throw new TanukiException($"{nameof(item)} is invalid");
 					}
 
 					ushort id = item.ID;
-					if ((CachedProductData == null) || !CachedProductData.ContainsKey(id)) {
+					if ((CachedProductData == null) || !CachedProductData.TryGetValue(id, out var product)) {
 						ProductData productData = await GetProducts().ConfigureAwait(false);
-						if (productData == null) {
-							Log($"{nameof(productData)} is null!");
-							continue;
+
+						CachedProductData = productData ?? throw new TanukiException($"{nameof(productData)} is null!");
+
+						if (!CachedProductData.TryGetValue(id, out product)) {
+							throw new TanukiException($"{id} doesn't exist in {nameof(CachedProductData)}");
 						}
-
-						CachedProductData = productData;
 					}
-
-					if (!CachedProductData.ContainsKey(id)) {
-						Log($"{nameof(id)} doesn't exist in {nameof(CachedProductData)}");
-						continue;
-					}
-
-					MenuResponse.Properties.State.ProductsInfo.Product product = CachedProductData[id];
 
 					string response = $"{product.Title}\nСтарая цена: {product.Price}₽\nЦена по акции: {item.Price}₽\n[Ссылка]({product.Link})";
-					await BotClient.SendPhotoAsync(Config.Channel, new InputOnlineFile(product.ImageLink), response, ParseMode.Markdown).ConfigureAwait(false);
+					await botClient.SendPhotoAsync(config.Channel, new InputOnlineFile(product.ImageLink), response, ParseMode.Markdown).ConfigureAwait(false);
 
 					Log("Successfully sent info about current offer!");
 					await Task.Delay(TimeSpan.FromSeconds(item.TimeInfo.LeftSeconds)).ConfigureAwait(false);
+				} catch (TanukiException e) when (e.Message == "Failed with false body result") {
+					await Task.Delay(TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+				} catch (TanukiException e) {
+					Log("Tanuki error: " + e.Message);
+					await Task.Delay(TimeSpan.FromMinutes(1)).ConfigureAwait(false);
 				} catch (Exception e) {
 					Log("Unknown exception: " + e);
+					await Task.Delay(TimeSpan.FromMinutes(1)).ConfigureAwait(false);
 				}
 			}
 		}

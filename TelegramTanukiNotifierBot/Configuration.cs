@@ -1,39 +1,47 @@
 using System;
 using System.IO;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 
 namespace TelegramTanukiNotifierBot {
-	internal class Configuration {
-		[JsonProperty(Required = Required.Always)]
-		internal string BotToken;
-
-		[JsonProperty(Required = Required.Always)]
-		internal string Channel;
-
-		private Configuration() {
+	public class Configuration {
+		[JsonConstructor]
+		// ReSharper disable once MemberCanBePrivate.Global
+		public Configuration(string botToken, string channel) {
+			BotToken = botToken;
+			Channel = channel;
 		}
+
+		public string BotToken { get; }
+
+		public string Channel { get; }
 
 		internal static Configuration Create() {
-			Configuration config = new Configuration();
+			string? botToken = null;
+			while (string.IsNullOrEmpty(botToken)) {
+				Console.WriteLine(nameof(BotToken) + ":");
+				botToken = Console.ReadLine();
+			}
 
-			Console.WriteLine(nameof(BotToken) + ":");
-			config.BotToken = Console.ReadLine();
+			string? channel = null;
+			while (string.IsNullOrEmpty(channel)) {
+				Console.WriteLine(nameof(Channel) + ":");
+				channel = Console.ReadLine();
+			}
 
-			Console.WriteLine(nameof(Channel) + ":");
-			config.Channel = Console.ReadLine();
-
-			return config;
+			return new Configuration(botToken, channel);
 		}
 
-		internal static Configuration Load() {
+		internal static async Task<Configuration?> Load() {
 			if (!File.Exists("config.json")) {
 				return null;
 			}
 
-			string content = File.ReadAllText("config.json");
-			Configuration loadedConfig;
+			await using FileStream file = File.OpenRead("config.json");
+			Configuration? loadedConfig;
 			try {
-				loadedConfig = JsonConvert.DeserializeObject<Configuration>(content);
+				loadedConfig = await JsonSerializer.DeserializeAsync<Configuration>(file).ConfigureAwait(false);
 			} catch {
 				return null;
 			}
@@ -41,9 +49,9 @@ namespace TelegramTanukiNotifierBot {
 			return loadedConfig;
 		}
 
-		internal void Save() {
-			string content = JsonConvert.SerializeObject(this);
-			File.WriteAllText("config.json", content);
+		internal async Task Save() {
+			await using FileStream file = File.OpenWrite("config.json");
+			await JsonSerializer.SerializeAsync(file, this).ConfigureAwait(false);
 		}
 	}
 }

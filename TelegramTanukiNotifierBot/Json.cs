@@ -1,131 +1,86 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using Newtonsoft.Json;
 
-#pragma warning disable 649
+// ReSharper disable UnusedAutoPropertyAccessor.Global
+// ReSharper disable ClassNeverInstantiated.Global
 
 namespace TelegramTanukiNotifierBot {
 	internal sealed class ApiResponse {
 		[JsonProperty(Required = Required.DisallowNull)]
-		internal InternalResponseBody ResponseBody;
+		internal InternalResponseBody? ResponseBody { get; private set; }
 
 		[JsonProperty(PropertyName = "Response", Required = Required.Always)]
-		internal InternalResponse ResponseInfo;
+		internal InternalResponse ResponseInfo { get; private set; } = null!;
 
 		internal sealed class InternalResponse {
-			[JsonProperty(PropertyName = "method", Required = Required.Always)]
-			internal string Method;
-
 			[JsonProperty(PropertyName = "Result", Required = Required.Always)]
-			internal Result ResultInfo;
+			internal Result ResultInfo { get; private set; } = null!;
 
 			internal sealed class Result {
-				[JsonProperty(PropertyName = "code", Required = Required.Always)]
-				internal ushort Code;
+				[JsonProperty(Required = Required.Always)]
+				internal ushort Code { get; private set; }
 
 				[JsonProperty(PropertyName = "errorCode", Required = Required.Always)]
-				internal ushort ErrorCode;
+				internal ushort ErrorCode { get; private set; }
 
 				[JsonProperty(PropertyName = "message", Required = Required.Always)]
-				internal string Message;
+				internal string Message { get; private set; } = null!;
 			}
 		}
 
 		internal sealed class InternalResponseBody {
 			[JsonProperty(PropertyName = "items", Required = Required.DisallowNull)]
-			internal Dictionary<string, Item> Items;
+			internal Dictionary<string, Item>? Items { get; private set; }
 
 			[JsonProperty(PropertyName = "result", Required = Required.Always)]
-			internal bool Result;
+			internal bool Result { get; private set; }
 
-			internal sealed class Item : TelegramTanukiNotifierBot.Item {
+			internal record Item : TelegramTanukiNotifierBot.Item {
 				[JsonProperty(PropertyName = "time", Required = Required.Always)]
-				internal Time TimeInfo;
+				internal Time TimeInfo { get; private set; }
 
 				internal sealed class Time {
-					[JsonProperty(PropertyName = "end", Required = Required.Always)]
-					internal ulong EndTimestamp;
-
 					[JsonProperty(PropertyName = "left", Required = Required.Always)]
-					internal ushort LeftSeconds;
-
-					[JsonProperty(PropertyName = "start", Required = Required.Always)]
-					internal ulong StartTimestamp;
+					internal ushort LeftSeconds { get; private set; }
 				}
 			}
 		}
 	}
 
-	internal class Item {
-		[JsonIgnore]
-		internal ushort ID;
+	public record Item {
+		public ushort ID { get; init; }
 
-		[JsonIgnore]
-		internal ushort Price;
-
-		[JsonProperty(PropertyName = "id", Required = Required.Always)]
-		private string IDText {
-			get => ID.ToString();
-
-			set {
-				if (string.IsNullOrEmpty(value)) {
-					Program.Log($"{nameof(IDText)}: {nameof(value)} is null!");
-					return;
-				}
-
-				if (!ushort.TryParse(value, out ID) || (ID == 0)) {
-					Program.Log($"{nameof(IDText)}: {nameof(value)} is invalid!");
-				}
-			}
-		}
-
-		[JsonProperty(PropertyName = "price", Required = Required.Always)]
-		private string PriceText {
-			get => Price.ToString();
-
-			set {
-				if (string.IsNullOrEmpty(value)) {
-					Program.Log($"{nameof(PriceText)}: {nameof(value)} is null!");
-					return;
-				}
-
-				if (!ushort.TryParse(value, out Price) || (Price == 0)) {
-					Program.Log($"{nameof(PriceText)}: {nameof(value)} is invalid!");
-				}
-			}
-		}
+		public ushort Price { get; init; }
 	}
 
-	internal sealed class MenuResponse {
-		[JsonProperty(PropertyName = "err", Required = Required.AllowNull)]
-		internal string Error;
+	public record MenuResponse {
+		[JsonPropertyName("err")]
+		public string Error { get; init; }
 
-		[JsonProperty(PropertyName = "props", Required = Required.Always)]
-		internal Properties PropertiesInfo;
+		[JsonPropertyName("props")]
+		public Properties PropertiesInfo { get; init; }
 
-		internal sealed class Properties {
-			[JsonProperty(PropertyName = "initialState", Required = Required.DisallowNull)]
-			internal State InitialState;
+		public record Properties {
+			public State InitialState { get; init; }
 
-			internal sealed class State {
-				[JsonProperty(PropertyName = "products", Required = Required.Always)]
-				internal ProductsInfo Products;
+			public record State {
+				public ProductsInfo Products { get; init; }
 
-				internal sealed class ProductsInfo {
-					[JsonProperty(PropertyName = "error", Required = Required.AllowNull)]
-					internal string Error;
+				public record ProductsInfo {
+					public string Error { get; init; }
 
-					[JsonProperty(PropertyName = "data", Required = Required.Always)]
-					internal Dictionary<ushort, Product> Products;
+					[JsonPropertyName("data")]
+					public Dictionary<ushort, Product> Products { get; init; }
 
-					internal sealed class Product : Item {
-						[JsonProperty(PropertyName = "img", Required = Required.Always)]
-						internal string ImageLink;
+					public record Product : Item {
+						[JsonPropertyName("img")]
+						public string ImageLink { get; init; }
 
-						[JsonProperty(PropertyName = "share", Required = Required.Always)]
-						internal string Link;
+						[JsonPropertyName("share")]
+						public string Link { get; set; }
 
-						[JsonProperty(PropertyName = "title", Required = Required.Always)]
-						internal string Title;
+						public string Title { get; init; }
 					}
 				}
 			}
