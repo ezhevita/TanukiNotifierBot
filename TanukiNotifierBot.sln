@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TelegramTanukiNotifierBot", "TelegramTanukiNotifierBot\TelegramTanukiNotifierBot.csproj", "{20A6704E-FAC7-4212-B4C7-021CEDF1DFE0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TanukiNotifierBot", "TanukiNotifierBot\TanukiNotifierBot.csproj", "{20A6704E-FAC7-4212-B4C7-021CEDF1DFE0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
