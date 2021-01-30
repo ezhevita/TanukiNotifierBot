@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -21,6 +22,10 @@ namespace TanukiNotifierBot {
 	internal static class Program {
 		private const string TanukiHost = "https://www.tanuki.ru";
 		private static ProductData? CachedProductData;
+
+		private static readonly HashSet<ushort> ProductsToSkip = new() {
+			13943
+		};
 
 		private static readonly IFlurlClient Client = new FlurlClient(
 			new HttpClient {
@@ -89,6 +94,10 @@ namespace TanukiNotifierBot {
 
 			// Tanuki gives us invalid link in the JSON, so we have to correct it using data from HTML
 			foreach ((ushort id, MenuResponse.Properties.State.ProductsInfo.Product product) in productsInfo.Products) {
+				if (ProductsToSkip.Contains(id)) {
+					continue;
+				}
+
 				IElement? productNode = (IElement) document.Body.SelectSingleNode($"//div[@data-id='{id}']/div/div[@class='product__box']/a");
 				if (productNode == null) {
 					throw new TanukiException(nameof(productNode) + " is null");
