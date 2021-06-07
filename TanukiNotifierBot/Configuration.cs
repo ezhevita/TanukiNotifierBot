@@ -38,20 +38,24 @@ namespace TanukiNotifierBot {
 				return null;
 			}
 
-			await using FileStream file = File.OpenRead("config.json");
 			Configuration? loadedConfig;
-			try {
-				loadedConfig = await JsonSerializer.DeserializeAsync<Configuration>(file).ConfigureAwait(false);
-			} catch {
-				return null;
+			FileStream file = File.OpenRead("config.json");
+			await using (file.ConfigureAwait(false)) {
+				try {
+					loadedConfig = await JsonSerializer.DeserializeAsync<Configuration>(file).ConfigureAwait(false);
+				} catch {
+					return null;
+				}
 			}
 
 			return loadedConfig;
 		}
 
 		internal async Task Save() {
-			await using FileStream file = File.OpenWrite("config.json");
-			await JsonSerializer.SerializeAsync(file, this).ConfigureAwait(false);
+			FileStream file = File.OpenWrite("config.json");
+			await using (file.ConfigureAwait(false)) {
+				await JsonSerializer.SerializeAsync(file, this).ConfigureAwait(false);
+			}
 		}
 	}
 }
