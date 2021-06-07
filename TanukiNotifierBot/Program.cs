@@ -4,14 +4,13 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using AngleSharp.Dom;
 using AngleSharp.Html.Dom;
 using AngleSharp.Html.Parser;
 using AngleSharp.XPath;
 using Flurl.Http;
+using Newtonsoft.Json;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types.Enums;
@@ -56,11 +55,6 @@ namespace TanukiNotifierBot {
 			data = new { }
 		};
 
-		private static readonly JsonSerializerOptions SerializerOptions = new() {
-			NumberHandling = JsonNumberHandling.AllowReadingFromString,
-			PropertyNameCaseInsensitive = true
-		};
-
 		private static readonly HtmlParser Parser = new();
 
 		private static async Task<ProductData> GetProducts() {
@@ -78,7 +72,7 @@ namespace TanukiNotifierBot {
 			const string prefix = "__NEXT_DATA__ = ";
 			scriptContent = scriptContent.Trim()[prefix.Length..];
 
-			MenuResponse? menuResponse = JsonSerializer.Deserialize<MenuResponse>(scriptContent, SerializerOptions);
+			MenuResponse? menuResponse = JsonConvert.DeserializeObject<MenuResponse?>(scriptContent);
 			if (menuResponse == null) {
 				throw new TanukiException(nameof(menuResponse) + " is null");
 			}
@@ -87,9 +81,17 @@ namespace TanukiNotifierBot {
 				throw new TanukiException($"Menu error: {menuResponse.Error}");
 			}
 
+			if (menuResponse.PropertiesInfo == null) {
+				throw new TanukiException(nameof(menuResponse.PropertiesInfo) + " is null");
+			}
+
 			MenuResponse.Properties.State.ProductsInfo productsInfo = menuResponse.PropertiesInfo.InitialState.Products;
 			if (!string.IsNullOrEmpty(productsInfo.Error)) {
 				throw new TanukiException($"Products error: {productsInfo.Error}");
+			}
+
+			if (productsInfo.Products == null) {
+				throw new TanukiException(nameof(productsInfo.Products) + " is null");
 			}
 
 			List<ushort> invalidProducts = new();

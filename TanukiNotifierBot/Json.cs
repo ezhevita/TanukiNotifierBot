@@ -1,9 +1,5 @@
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
 using Newtonsoft.Json;
-
-// ReSharper disable UnusedAutoPropertyAccessor.Global
-// ReSharper disable ClassNeverInstantiated.Global
 
 namespace TanukiNotifierBot {
 	internal sealed class ApiResponse {
@@ -38,7 +34,7 @@ namespace TanukiNotifierBot {
 
 			internal record Item : TanukiNotifierBot.Item {
 				[JsonProperty(PropertyName = "time", Required = Required.Always)]
-				internal Time TimeInfo { get; private set; }
+				internal Time TimeInfo { get; private set; } = null!;
 
 				internal sealed class Time {
 					[JsonProperty(PropertyName = "left", Required = Required.Always)]
@@ -49,38 +45,44 @@ namespace TanukiNotifierBot {
 	}
 
 	public record Item {
-		public ushort ID { get; init; }
+		[JsonProperty(Required = Required.Always)]
+		public ushort ID { get; private set; }
 
-		public ushort Price { get; init; }
+		[JsonProperty(Required = Required.Always)]
+		public ushort Price { get; private set; }
 	}
 
 	public record MenuResponse {
-		[JsonPropertyName("err")]
-		public string Error { get; init; }
+		[JsonProperty(PropertyName = "err", Required = Required.AllowNull)]
+		public string? Error { get; private set; }
 
-		[JsonPropertyName("props")]
-		public Properties PropertiesInfo { get; init; }
+		[JsonProperty(PropertyName = "props", Required = Required.AllowNull)]
+		public Properties? PropertiesInfo { get; private set; }
 
 		public record Properties {
-			public State InitialState { get; init; }
+			[JsonProperty(Required = Required.Always)]
+			public State InitialState { get; private set; } = null!;
 
 			public record State {
-				public ProductsInfo Products { get; init; }
+				[JsonProperty(Required = Required.Always)]
+				public ProductsInfo Products { get; private set; } = null!;
 
 				public record ProductsInfo {
-					public string Error { get; init; }
+					[JsonProperty(Required = Required.AllowNull)]
+					public string? Error { get; private set; }
 
-					[JsonPropertyName("data")]
-					public Dictionary<ushort, Product> Products { get; init; }
+					[JsonProperty(PropertyName = "data", Required = Required.AllowNull)]
+					public Dictionary<ushort, Product>? Products { get; private set; }
 
 					public record Product : Item {
-						[JsonPropertyName("img")]
-						public string ImageLink { get; init; }
+						[JsonProperty(PropertyName = "img", Required = Required.Always)]
+						public string ImageLink { get; private set; } = null!;
 
-						[JsonPropertyName("share")]
-						public string Link { get; set; }
-
-						public string Title { get; init; }
+						[JsonProperty(PropertyName = "share", Required = Required.Always)]
+						public string Link { get; set; } = null!;
+						
+						[JsonProperty(Required = Required.Always)]
+						public string Title { get; private set; } = null!;
 					}
 				}
 			}
