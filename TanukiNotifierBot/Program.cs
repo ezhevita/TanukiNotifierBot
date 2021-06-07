@@ -92,15 +92,19 @@ namespace TanukiNotifierBot {
 				throw new TanukiException($"Products error: {productsInfo.Error}");
 			}
 
+			List<ushort> invalidProducts = new();
+			
 			// Tanuki gives us invalid link in the JSON, so we have to correct it using data from HTML
 			foreach ((ushort id, MenuResponse.Properties.State.ProductsInfo.Product product) in productsInfo.Products) {
 				if (ProductsToSkip.Contains(id)) {
 					continue;
 				}
 
-				IElement? productNode = (IElement) document.Body.SelectSingleNode($"//div[@data-id='{id}']/div/div[@class='product__box']/a");
+				IElement? productNode = (IElement?) document.Body.SelectSingleNode($"//div[@data-id='{id}']/div/div[@class='product__box']/a");
 				if (productNode == null) {
-					throw new TanukiException(nameof(productNode) + " is null");
+					// Product is not shown, remove it from data - it may appear later and we will have a broken link
+					invalidProducts.Add(id);
+					continue;
 				}
 
 				string productUrl = productNode.GetAttribute("href");
@@ -109,6 +113,10 @@ namespace TanukiNotifierBot {
 				}
 
 				product.Link = TanukiHost + productUrl;
+			}
+
+			foreach (ushort invalidProduct in invalidProducts) {
+				productsInfo.Products.Remove(invalidProduct);
 			}
 
 			return productsInfo.Products;
